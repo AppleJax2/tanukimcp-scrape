@@ -1,0 +1,43 @@
+version: 1
+start:
+  command: ["node", "dist/server.js"]
+  port: 8000
+build:
+  dockerfile: "Dockerfile"
+environment:
+  NODE_ENV: "production"
+  MCP_TRANSPORT: "streamable-http"
+features:
+  - streamable-http
+  - stdio-fallback
+healthcheck:
+  path: "/health"
+  interval: 30s
+  timeout: 10s
+  retries: 3
+metadata:
+  name: "TanukiMCP Scrape"
+  description: "Intelligent web scraping MCP server with structured workflow"
+  version: "1.0.0"
+  author: "TanukiMCP"
+  tags:
+    - "web-scraping"
+    - "data-extraction"
+    - "automation"
+    - "puppeteer"
+  categories:
+    - "data"
+    - "automation"
+    - "web"
+resources:
+  memory: "512MB"
+  cpu: "0.5"
+  timeout: "300s"
+scaling:
+  min_instances: 0
+  max_instances: 10
+  target_cpu: 70
+security:
+  allow_network: true
+  allow_filesystem: true
+  sandbox: false 
