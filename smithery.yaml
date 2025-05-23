@@ -7,6 +7,8 @@ build:
 environment:
   NODE_ENV: "production"
   MCP_TRANSPORT: "streamable-http"
+  PORT: "8000"
+  HOST: "0.0.0.0"
 features:
   - streamable-http
   - stdio-fallback
@@ -15,6 +17,7 @@ healthcheck:
   interval: 30s
   timeout: 10s
   retries: 3
+  start_period: 5s
 metadata:
   name: "TanukiMCP Scrape"
   description: "Intelligent web scraping MCP server with structured workflow"
@@ -25,19 +28,23 @@ metadata:
     - "data-extraction"
     - "automation"
     - "puppeteer"
+    - "mcp"
   categories:
     - "data"
     - "automation"
     - "web"
 resources:
-  memory: "512MB"
+  memory: "1GB"
   cpu: "0.5"
   timeout: "300s"
+  disk: "1GB"
 scaling:
   min_instances: 0
-  max_instances: 10
+  max_instances: 5
   target_cpu: 70
+  scale_down_delay: "300s"
 security:
   allow_network: true
-  allow_filesystem: true
-  sandbox: false 
+  allow_filesystem: false
+  sandbox: true
+  max_request_size: "50MB" 

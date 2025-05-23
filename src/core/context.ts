@@ -6,8 +6,16 @@
  * helps LLMs make informed decisions about data freshness and relevance.
  */
 
-import { format, isWeekend, isAfter, isBefore, parseISO, addMinutes } from 'date-fns';
 import { DynamicContext } from '../types/config.js';
+
+// Define MemoryUsage interface locally to avoid Node.js type dependency issues
+interface MemoryUsage {
+  rss: number;
+  heapTotal: number;
+  heapUsed: number;
+  external: number;
+  arrayBuffers: number;
+}
 
 export class ContextProvider {
   private timezone: string;
@@ -37,9 +45,9 @@ export class ContextProvider {
       timezone: this.timezone,
       business_day: this.isBusinessDay(now),
       date_formatted: {
-        human: format(now, 'MMMM d, yyyy'),
-        short: format(now, 'yyyy-MM-dd'),
-        day_of_week: format(now, 'EEEE'),
+        human: this.formatDate(now, 'human'),
+        short: this.formatDate(now, 'short'),
+        day_of_week: this.formatDate(now, 'day'),
       },
       session_info: {
         session_start: sessionStart.toISOString(),
@@ -47,6 +55,26 @@ export class ContextProvider {
         pages_scraped: pagesScraped,
       },
     };
+  }
+
+  /**
+   * Format date using native methods instead of date-fns
+   */
+  private formatDate(date: Date, type: 'human' | 'short' | 'day'): string {
+    switch (type) {
+      case 'human':
+        return date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        });
+      case 'short':
+        return date.toISOString().split('T')[0];
+      case 'day':
+        return date.toLocaleDateString('en-US', { weekday: 'long' });
+      default:
+        return date.toISOString();
+    }
   }
 
   /**
@@ -62,8 +90,8 @@ export class ContextProvider {
     const now = new Date();
     return {
       iso: now.toISOString(),
-      human: format(now, 'PPpp'),
-      short: format(now, 'yyyy-MM-dd HH:mm'),
+      human: this.formatDate(now, 'human'),
+      short: this.formatDate(now, 'short'),
       timestamp: now.getTime(),
       timezone: this.timezone,
     };
@@ -75,12 +103,16 @@ export class ContextProvider {
   isBusinessHours(date?: Date): boolean {
     const checkDate = date || new Date();
     
-    if (isWeekend(checkDate)) {
+    if (checkDate.getDay() === 0 || checkDate.getDay() === 6) {
       return false;
     }
 
-    const timeStr = format(checkDate, 'HH:mm');
-    return timeStr >= this.businessHours.start && timeStr <= this.businessHours.end;
+    const timeStr = this.formatDate(checkDate, 'short').split('T')[1];
+    const start = this.businessHours.start.split(':');
+    const end = this.businessHours.end.split(':');
+    const startTime = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate(), parseInt(start[0]), parseInt(start[1]));
+    const endTime = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate(), parseInt(end[0]), parseInt(end[1]));
+    return timeStr >= startTime.toISOString().split('T')[1] && timeStr <= endTime.toISOString().split('T')[1];
   }
 
   /**
@@ -88,7 +120,8 @@ export class ContextProvider {
    */
   isBusinessDay(date?: Date): boolean {
     const checkDate = date || new Date();
-    return !isWeekend(checkDate);
+    const dayOfWeek = checkDate.getDay();
+    return dayOfWeek !== 0 && dayOfWeek !== 6; // 0 = Sunday, 6 = Saturday
   }
 
   /**
@@ -155,7 +188,7 @@ export class ContextProvider {
     }
 
     return {
-      absolute: format(fromDate, 'PPpp'),
+      absolute: this.formatDate(fromDate, 'human'),
       relative,
       is_recent: diffHours < 48,
       age_category: ageCategory,
@@ -188,18 +221,18 @@ export class ContextProvider {
         '2025', 'now', 'updated', 'fresh', 'real-time', 'live'
       ],
       date_ranges: {
-        today: format(now, 'yyyy-MM-dd'),
+        today: this.formatDate(now, 'short'),
         this_week: {
-          start: format(startOfWeek, 'yyyy-MM-dd'),
-          end: format(now, 'yyyy-MM-dd'),
+          start: this.formatDate(startOfWeek, 'short'),
+          end: this.formatDate(now, 'short'),
         },
         this_month: {
-          start: format(startOfMonth, 'yyyy-MM-dd'),
-          end: format(now, 'yyyy-MM-dd'),
+          start: this.formatDate(startOfMonth, 'short'),
+          end: this.formatDate(now, 'short'),
         },
         this_year: {
-          start: format(startOfYear, 'yyyy-MM-dd'),
-          end: format(now, 'yyyy-MM-dd'),
+          start: this.formatDate(startOfYear, 'short'),
+          end: this.formatDate(now, 'short'),
         },
       },
       urgency_indicators: [
@@ -293,7 +326,7 @@ ${freshness.is_recent_data_preferred ? '🔄 **Priority**: Recent data preferred
     const offsetSign = offsetMinutes <= 0 ? '+' : '-';
     
     return {
-      current_time: format(now, 'HH:mm:ss'),
+      current_time: this.formatDate(now, 'short'),
       recommended_times: [
         '02:00 - 06:00 (Low traffic)',
         '10:00 - 11:00 (Business hours start)', 
@@ -316,10 +349,10 @@ ${freshness.is_recent_data_preferred ? '🔄 **Priority**: Recent data preferred
   private getNextBusinessDay(date: Date): string {
     let nextDay = new Date(date);
     do {
-      nextDay = addMinutes(nextDay, 24 * 60); // Add one day
-    } while (isWeekend(nextDay));
+      nextDay = new Date(nextDay.setDate(nextDay.getDate() + 1));
+    } while (nextDay.getDay() === 0 || nextDay.getDay() === 6);
     
-    return format(nextDay, 'yyyy-MM-dd');
+    return this.formatDate(nextDay, 'short');
   }
 
   private isDaylightSavingTime(date: Date): boolean {

@@ -413,8 +413,8 @@ Please review the analysis above and confirm if you'd like to proceed with the c
 
   private isValidUrl(url: string): boolean {
     try {
-      new URL(url);
-      return true;
+      // Simple URL validation without requiring URL constructor
+      return url.startsWith('http://') || url.startsWith('https://');
     } catch {
       return false;
     }
